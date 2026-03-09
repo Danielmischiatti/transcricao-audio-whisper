@@ -511,8 +511,8 @@ export default function App() {
 
         {!result && !loading && (
           <div className="hero">
-            <h1 style={{ whiteSpace: "nowrap" }}>AUDIO <span style={{ fontWeight: 300, color: "var(--muted)" }}>TO</span> <span style={{ fontWeight: 600, color: "var(--text)" }}>TEXT</span></h1>
-            <p>Envie qualquer arquivo de áudio e receba<br />a transcrição completa em segundos.</p>
+            <h1>AUDIO <span style={{ fontWeight: 300, color: "var(--muted)" }}>TO</span> <span style={{ fontWeight: 600, color: "var(--text)" }}>TEXT</span></h1>
+            <p>Envie qualquer arquivo de áudio e receba a transcrição completa em segundos.</p>
           </div>
         )}
 
