@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 const API_URL = process.env.REACT_APP_API_URL
   ? `${process.env.REACT_APP_API_URL}/transcrever`
@@ -15,7 +15,6 @@ function formatSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// Exportar como TXT
 function exportTXT(transcricao, segmentos, nomeArquivo) {
   let conteudo = "TRANSCRIÇÃO\n";
   conteudo += "=".repeat(40) + "\n\n";
@@ -36,7 +35,6 @@ function exportTXT(transcricao, segmentos, nomeArquivo) {
   URL.revokeObjectURL(url);
 }
 
-// Exportar como DOCX usando docx.js via CDN (carregado dinamicamente)
 async function exportDOCX(transcricao, segmentos, nomeArquivo) {
   if (!window.docx) {
     await new Promise((resolve, reject) => {
@@ -74,7 +72,7 @@ async function exportDOCX(transcricao, segmentos, nomeArquivo) {
       children.push(
         new Paragraph({
           children: [
-            new TextRun({ text: `[${formatTime(s.inicio)} → ${formatTime(s.fim)}]  `, bold: true, size: 20, color: "888680" }),
+            new TextRun({ text: `[${formatTime(s.inicio)} → ${formatTime(s.fim)}]  `, bold: true, size: 20, color: "888888" }),
             new TextRun({ text: s.texto, size: 22 }),
           ],
           spacing: { after: 120 },
@@ -83,10 +81,7 @@ async function exportDOCX(transcricao, segmentos, nomeArquivo) {
     });
   }
 
-  const doc = new Document({
-    sections: [{ properties: {}, children }],
-  });
-
+  const doc = new Document({ sections: [{ properties: {}, children }] });
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -96,46 +91,40 @@ async function exportDOCX(transcricao, segmentos, nomeArquivo) {
   URL.revokeObjectURL(url);
 }
 
-// Componente de loading animado
 function LoadingSpinner() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "36px 32px" }}>
-      <div style={{ position: "relative", width: 48, height: 48 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, padding: "48px 32px" }}>
+      <div style={{ position: "relative", width: 52, height: 52 }}>
         <div style={{
           position: "absolute", inset: 0,
-          border: "2px solid var(--border)",
-          borderTopColor: "var(--accent)",
+          border: "2px solid #2a2a2a",
+          borderTopColor: "#ffffff",
           borderRadius: "50%",
           animation: "spin 0.8s linear infinite",
         }} />
         <div style={{
-          position: "absolute", inset: 6,
+          position: "absolute", inset: 7,
           border: "2px solid transparent",
-          borderTopColor: "var(--muted)",
+          borderTopColor: "#555",
           borderRadius: "50%",
-          animation: "spin 1.2s linear infinite reverse",
+          animation: "spin 1.3s linear infinite reverse",
         }} />
       </div>
       <div style={{ textAlign: "center" }}>
-        <div className="mono" style={{ fontSize: 13, color: "var(--text)", marginBottom: 4 }}>
-          Transcrevendo...
+        <div style={{ fontSize: 16, fontWeight: 500, color: "#ffffff", marginBottom: 6, letterSpacing: "0.04em" }}>
+          TRANSCREVENDO
         </div>
-        <div className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>
-          Isso pode levar alguns segundos
+        <div style={{ fontSize: 13, color: "#666", letterSpacing: "0.06em" }}>
+          AGUARDE ALGUNS INSTANTES
         </div>
       </div>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
 }
 
-// Dropdown de exportação
 function ExportDropdown({ onExportTXT, onExportDOCX }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
-
   const handleBlur = () => setTimeout(() => setOpen(false), 150);
 
   return (
@@ -144,9 +133,9 @@ function ExportDropdown({ onExportTXT, onExportDOCX }) {
         className="btn-ghost"
         onClick={() => setOpen(o => !o)}
         onBlur={handleBlur}
-        style={{ display: "flex", alignItems: "center", gap: 6 }}
+        style={{ display: "flex", alignItems: "center", gap: 7 }}
       >
-        exportar
+        EXPORTAR
         <span style={{
           fontSize: 8,
           transition: "transform 0.2s",
@@ -157,14 +146,14 @@ function ExportDropdown({ onExportTXT, onExportDOCX }) {
       {open && (
         <div style={{
           position: "absolute",
-          bottom: "calc(100% + 6px)",
+          bottom: "calc(100% + 8px)",
           right: 0,
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
+          background: "#1a1a1a",
+          border: "1px solid #2e2e2e",
           borderRadius: 8,
           overflow: "hidden",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-          minWidth: 120,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          minWidth: 130,
           zIndex: 10,
         }}>
           <button className="dropdown-item" onMouseDown={onExportTXT}>
@@ -188,6 +177,11 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [showSegments, setShowSegments] = useState(false);
   const inputRef = useRef();
+
+  // Título da aba do navegador
+  useEffect(() => {
+    document.title = "Transcreve.ai";
+  }, []);
 
   const handleFile = (f) => {
     if (!f) return;
@@ -236,247 +230,290 @@ export default function App() {
   };
 
   const nomeBase = file ? file.name.replace(/\.[^.]+$/, "") : "transcricao";
-
   const handleExportTXT = () => exportTXT(result.transcricao, result.segmentos, nomeBase);
-
   const handleExportDOCX = async () => {
-    try {
-      await exportDOCX(result.transcricao, result.segmentos, nomeBase);
-    } catch (e) {
-      alert("Erro ao exportar DOCX: " + e.message);
-    }
+    try { await exportDOCX(result.transcricao, result.segmentos, nomeBase); }
+    catch (e) { alert("Erro ao exportar DOCX: " + e.message); }
   };
 
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#F7F6F3",
+      background: "#0d0d0d",
       display: "flex",
       flexDirection: "column",
-      fontFamily: "'Instrument Serif', Georgia, serif",
-      color: "#1a1a1a",
+      fontFamily: "'Gotham SSm A', 'Gotham SSm B', 'Gotham', 'Montserrat', sans-serif",
+      color: "#f0f0f0",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap');
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-          --bg: #F7F6F3;
-          --surface: #FFFFFF;
-          --border: #E5E3DC;
-          --text: #1a1a1a;
-          --muted: #888680;
-          --accent: #1a1a1a;
-          --accent-light: #f0efe8;
-          --error: #C1392B;
-          --radius: 12px;
+          --bg: #0d0d0d;
+          --surface: #161616;
+          --surface2: #1e1e1e;
+          --border: #2a2a2a;
+          --border2: #333;
+          --text: #f0f0f0;
+          --muted: #666;
+          --muted2: #888;
+          --accent: #ffffff;
+          --accent-dim: #1a1a1a;
+          --error: #e05555;
+          --radius: 14px;
         }
 
         body { background: var(--bg); }
-        .mono { font-family: 'Geist Mono', monospace; }
 
         .header {
-          padding: 32px 40px 0;
+          padding: 36px 48px 0;
           display: flex; align-items: center; justify-content: space-between;
         }
-        .logo { font-size: 18px; letter-spacing: -0.02em; }
-        .logo span { font-style: italic; color: var(--muted); }
+
+        .logo {
+          font-size: 20px;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--text);
+        }
+        .logo span { color: var(--muted2); font-weight: 300; }
+
+        .badge {
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--muted);
+          border: 1px solid var(--border);
+          border-radius: 99px;
+          padding: 4px 12px;
+        }
 
         .main {
           flex: 1; display: flex; flex-direction: column;
           align-items: center; justify-content: center;
-          padding: 48px 24px; gap: 40px;
+          padding: 56px 24px; gap: 44px;
         }
 
-        .hero { text-align: center; max-width: 480px; }
+        .hero { text-align: center; max-width: 560px; }
         .hero h1 {
-          font-size: clamp(36px, 6vw, 54px);
-          font-weight: 400; letter-spacing: -0.03em;
-          line-height: 1.1; margin-bottom: 14px;
+          font-size: clamp(40px, 5vw, 62px);
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          line-height: 1.1;
+          margin-bottom: 18px;
+          text-transform: uppercase;
+          color: var(--text);
         }
-        .hero h1 em { font-style: italic; color: var(--muted); }
+        .hero h1 span { color: var(--muted); font-weight: 300; }
         .hero p {
-          font-family: 'Geist Mono', monospace;
-          font-size: 12px; color: var(--muted); line-height: 1.7;
+          font-size: 15px;
+          font-weight: 300;
+          color: var(--muted2);
+          line-height: 1.7;
+          letter-spacing: 0.03em;
         }
 
         .card {
-          width: 100%; max-width: 520px;
+          width: 100%; max-width: 580px;
           background: var(--surface);
           border: 1px solid var(--border);
           border-radius: var(--radius);
           overflow: hidden;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.05);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 16px 48px rgba(0,0,0,0.3);
         }
 
         .dropzone {
-          padding: 44px 32px; cursor: pointer;
+          padding: 52px 40px; cursor: pointer;
           transition: background 0.2s; text-align: center;
           border-bottom: 1px solid var(--border);
         }
-        .dropzone:hover, .dropzone.active { background: var(--accent-light); }
+        .dropzone:hover, .dropzone.active { background: var(--surface2); }
+
         .dropzone-icon {
-          width: 44px; height: 44px; background: var(--accent-light);
-          border-radius: 50%; display: flex; align-items: center;
-          justify-content: center; margin: 0 auto 16px; transition: background 0.2s;
+          width: 52px; height: 52px;
+          background: var(--surface2);
+          border: 1px solid var(--border2);
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 20px; transition: background 0.2s;
         }
-        .dropzone:hover .dropzone-icon { background: var(--border); }
-        .dropzone-title { font-size: 16px; letter-spacing: -0.01em; margin-bottom: 6px; }
+        .dropzone:hover .dropzone-icon {
+          background: var(--border);
+        }
+
+        .dropzone-title {
+          font-size: 18px; font-weight: 500;
+          letter-spacing: 0.04em; text-transform: uppercase;
+          margin-bottom: 8px; color: var(--text);
+        }
         .dropzone-sub {
-          font-family: 'Geist Mono', monospace;
-          font-size: 11px; color: var(--muted); letter-spacing: 0.04em;
+          font-size: 12px; font-weight: 300;
+          color: var(--muted); letter-spacing: 0.08em;
+          text-transform: uppercase;
         }
 
         .file-info {
-          display: flex; align-items: center; gap: 12px;
-          padding: 18px 32px; border-bottom: 1px solid var(--border);
-          background: var(--accent-light);
+          display: flex; align-items: center; gap: 14px;
+          padding: 20px 40px; border-bottom: 1px solid var(--border);
+          background: var(--surface2);
         }
         .file-icon {
-          width: 34px; height: 34px; background: var(--surface);
-          border: 1px solid var(--border); border-radius: 8px;
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; font-size: 15px;
+          width: 38px; height: 38px; background: var(--border);
+          border-radius: 8px; display: flex; align-items: center;
+          justify-content: center; flex-shrink: 0; font-size: 16px;
         }
         .file-name {
-          font-size: 14px; letter-spacing: -0.01em;
+          font-size: 15px; font-weight: 400; letter-spacing: 0.02em;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
         }
         .file-size {
-          font-family: 'Geist Mono', monospace;
-          font-size: 11px; color: var(--muted); flex-shrink: 0;
+          font-size: 12px; font-weight: 300;
+          color: var(--muted); flex-shrink: 0; letter-spacing: 0.06em;
         }
 
         .actions {
-          padding: 18px 32px; display: flex; gap: 10px; align-items: center;
+          padding: 20px 40px; display: flex; gap: 12px; align-items: center;
         }
 
         .btn-primary {
-          flex: 1; background: var(--accent); color: #fff;
-          border: none; border-radius: 8px; padding: 11px 24px;
-          font-family: 'Geist Mono', monospace; font-size: 13px;
-          letter-spacing: 0.02em; cursor: pointer;
-          transition: opacity 0.2s, transform 0.15s;
+          flex: 1; background: #ffffff; color: #0d0d0d;
+          border: none; border-radius: 8px; padding: 14px 28px;
+          font-family: inherit; font-size: 14px; font-weight: 600;
+          letter-spacing: 0.1em; text-transform: uppercase;
+          cursor: pointer; transition: opacity 0.2s, transform 0.15s;
           display: flex; align-items: center; justify-content: center;
         }
-        .btn-primary:hover:not(:disabled) { opacity: 0.82; transform: translateY(-1px); }
-        .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-primary:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.25; cursor: not-allowed; }
 
         .btn-ghost {
-          background: transparent; border: 1px solid var(--border);
-          border-radius: 8px; padding: 10px 14px;
-          font-family: 'Geist Mono', monospace; font-size: 12px;
-          color: var(--muted); cursor: pointer; transition: all 0.15s;
+          background: transparent; border: 1px solid var(--border2);
+          border-radius: 8px; padding: 13px 16px;
+          font-family: inherit; font-size: 12px; font-weight: 500;
+          color: var(--muted2); cursor: pointer; transition: all 0.15s;
+          letter-spacing: 0.08em; text-transform: uppercase;
         }
         .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 
         .dropdown-item {
-          display: flex; align-items: center; gap: 8px;
-          width: 100%; padding: 10px 16px;
+          display: flex; align-items: center; gap: 10px;
+          width: 100%; padding: 12px 18px;
           background: none; border: none;
-          font-family: 'Geist Mono', monospace; font-size: 12px;
+          font-family: inherit; font-size: 13px; font-weight: 400;
           color: var(--text); cursor: pointer; text-align: left;
+          letter-spacing: 0.06em; text-transform: uppercase;
           transition: background 0.15s;
         }
-        .dropdown-item:hover { background: var(--accent-light); }
+        .dropdown-item:hover { background: var(--surface2); }
         .dropdown-item + .dropdown-item { border-top: 1px solid var(--border); }
 
         .result { animation: fadeUp 0.3s ease forwards; }
 
         .result-header {
-          padding: 14px 32px;
+          padding: 16px 40px;
           display: flex; align-items: center; justify-content: space-between;
           border-bottom: 1px solid var(--border);
         }
         .result-label {
-          font-family: 'Geist Mono', monospace;
-          font-size: 10px; letter-spacing: 0.1em;
-          text-transform: uppercase; color: var(--muted);
+          font-size: 11px; font-weight: 600;
+          letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
         }
         .result-btns { display: flex; gap: 8px; align-items: center; }
 
         .result-text {
-          padding: 24px 32px; font-size: 16px;
-          line-height: 1.8; letter-spacing: -0.01em;
+          padding: 28px 40px; font-size: 17px; font-weight: 300;
+          line-height: 1.85; letter-spacing: 0.01em;
           border-bottom: 1px solid var(--border);
+          color: var(--text);
         }
 
         .seg-toggle {
-          padding: 13px 32px;
+          padding: 14px 40px;
           display: flex; align-items: center; justify-content: space-between;
           cursor: pointer; transition: background 0.15s;
           border-bottom: 1px solid var(--border);
         }
-        .seg-toggle:hover { background: var(--accent-light); }
+        .seg-toggle:hover { background: var(--surface2); }
         .seg-label {
-          font-family: 'Geist Mono', monospace;
-          font-size: 11px; color: var(--muted); letter-spacing: 0.05em;
+          font-size: 11px; font-weight: 500;
+          color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
         }
         .seg-arrow { font-size: 9px; color: var(--muted); transition: transform 0.2s; }
         .seg-arrow.open { transform: rotate(180deg); }
 
         .seg-item {
-          display: grid; grid-template-columns: 48px 1fr;
-          gap: 14px; padding: 11px 32px;
+          display: grid; grid-template-columns: 56px 1fr;
+          gap: 16px; padding: 13px 40px;
           border-bottom: 1px solid var(--border); align-items: baseline;
         }
         .seg-item:last-child { border-bottom: none; }
         .seg-time {
-          font-family: 'Geist Mono', monospace;
-          font-size: 10px; color: var(--muted); letter-spacing: 0.03em;
+          font-size: 11px; font-weight: 500;
+          color: var(--muted); letter-spacing: 0.06em;
         }
-        .seg-text { font-size: 14px; line-height: 1.65; }
+        .seg-text { font-size: 15px; font-weight: 300; line-height: 1.65; color: var(--text); }
 
         .error-box {
-          padding: 14px 32px; background: #fff8f7;
-          border-bottom: 1px solid #fad7d3;
-          display: flex; gap: 10px; align-items: flex-start;
+          padding: 16px 40px; background: #1a0e0e;
+          border-bottom: 1px solid #3a1a1a;
+          display: flex; gap: 12px; align-items: flex-start;
         }
         .error-dot {
-          width: 5px; height: 5px; background: var(--error);
-          border-radius: 50%; margin-top: 6px; flex-shrink: 0;
+          width: 6px; height: 6px; background: var(--error);
+          border-radius: 50%; margin-top: 7px; flex-shrink: 0;
         }
         .error-msg {
-          font-family: 'Geist Mono', monospace;
-          font-size: 12px; color: var(--error); line-height: 1.5;
+          font-size: 13px; font-weight: 400;
+          color: var(--error); line-height: 1.5; letter-spacing: 0.02em;
         }
 
         .footer {
-          padding: 24px 40px;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
+          padding: 28px 48px;
+          display: flex; align-items: center; justify-content: center; gap: 10px;
         }
-        .footer-txt { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--muted); }
-        .footer-sep { width: 3px; height: 3px; background: var(--border); border-radius: 50%; }
+        .footer-txt {
+          font-size: 11px; font-weight: 400;
+          color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
+        }
+        .footer-sep { width: 3px; height: 3px; background: var(--border2); border-radius: 50%; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(6px); }
+          from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
         }
 
-        @media (max-width: 600px) {
-          .header { padding: 20px 20px 0; }
-          .main { padding: 32px 16px; gap: 28px; }
-          .hero h1 { font-size: 34px; }
-          .dropzone { padding: 32px 20px; }
+        @media (max-width: 640px) {
+          .header { padding: 24px 20px 0; }
+          .logo { font-size: 16px; }
+          .main { padding: 36px 16px; gap: 32px; }
+          .hero h1 { font-size: 36px; }
+          .hero p { font-size: 14px; }
+          .dropzone { padding: 40px 20px; }
           .file-info, .actions, .result-header, .result-text,
           .seg-toggle, .seg-item, .error-box { padding-left: 20px; padding-right: 20px; }
-          .seg-item { grid-template-columns: 40px 1fr; gap: 10px; }
+          .seg-item { grid-template-columns: 44px 1fr; gap: 10px; }
           .footer { padding: 20px; }
         }
       `}</style>
 
+      {/* Header */}
       <header className="header">
-        <div className="logo">transcreve<span>.ai</span></div>
-        <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>whisper / small</span>
+        <div className="logo">Transcreve<span>.ai</span></div>
+        <div className="badge">Whisper / Small</div>
       </header>
 
+      {/* Main */}
       <main className="main">
+
         {!result && !loading && (
           <div className="hero">
-            <h1>Áudio para texto,<br /><em>sem complicação</em></h1>
-            <p>Envie um arquivo de áudio e receba<br />a transcrição em segundos.</p>
+            <h1>Áudio para<br /><span>texto</span></h1>
+            <p>Envie qualquer arquivo de áudio e receba<br />a transcrição completa em segundos.</p>
           </div>
         )}
 
@@ -497,7 +534,7 @@ export default function App() {
                 onChange={(e) => handleFile(e.target.files[0])}
               />
               <div className="dropzone-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round">
                   <path d="M12 16V8m0 0l-3 3m3-3l3 3"/>
                   <path d="M20 16.7A4 4 0 0017 9h-1.3A7 7 0 104 15.3"/>
                 </svg>
@@ -529,9 +566,9 @@ export default function App() {
               <div className="result-header">
                 <span className="result-label">Transcrição</span>
                 <div className="result-btns">
-                  <button className="btn-ghost" onClick={copiar}>{copied ? "✓ copiado" : "copiar"}</button>
+                  <button className="btn-ghost" onClick={copiar}>{copied ? "✓ Copiado" : "Copiar"}</button>
                   <ExportDropdown onExportTXT={handleExportTXT} onExportDOCX={handleExportDOCX} />
-                  <button className="btn-ghost" onClick={resetar}>nova</button>
+                  <button className="btn-ghost" onClick={resetar}>Nova</button>
                 </div>
               </div>
               <div className="result-text">{result.transcricao}</div>
@@ -560,22 +597,22 @@ export default function App() {
           {file && !result && !loading && (
             <div className="actions">
               <button className="btn-primary" onClick={transcrever}>→ Transcrever</button>
-              <button className="btn-ghost" onClick={resetar}>cancelar</button>
+              <button className="btn-ghost" onClick={resetar}>Cancelar</button>
             </div>
           )}
 
           {!file && !result && !loading && (
             <div className="actions">
               <button className="btn-primary" onClick={() => inputRef.current.click()}>
-                Selecionar arquivo
+                Selecionar Arquivo
               </button>
             </div>
           )}
 
           {error && !loading && (
             <div className="actions">
-              <button className="btn-primary" onClick={transcrever}>→ Tentar novamente</button>
-              <button className="btn-ghost" onClick={resetar}>cancelar</button>
+              <button className="btn-primary" onClick={transcrever}>→ Tentar Novamente</button>
+              <button className="btn-ghost" onClick={resetar}>Cancelar</button>
             </div>
           )}
 
