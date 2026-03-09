@@ -316,7 +316,7 @@ export default function App() {
         }
 
         .card {
-          width: 100%; max-width: 580px;
+          width: 100%; max-width: 780px;
           background: var(--surface);
           border: 1px solid var(--border);
           border-radius: var(--radius);
@@ -423,7 +423,7 @@ export default function App() {
         .result-btns { display: flex; gap: 8px; align-items: center; }
 
         .result-text {
-          padding: 28px 40px; font-size: 17px; font-weight: 300;
+          padding: 28px 40px; font-size: 20px; font-weight: 300;
           line-height: 1.85; letter-spacing: 0.01em;
           border-bottom: 1px solid var(--border);
           color: var(--text);
