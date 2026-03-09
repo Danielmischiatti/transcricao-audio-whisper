@@ -625,6 +625,8 @@ export default function App() {
         <span className="footer-txt">Hugging Face</span>
         <div className="footer-sep" />
         <span className="footer-txt">Vercel</span>
+        <div className="footer-sep" />
+        <span className="footer-txt">danielmischiatti</span>
       </footer>
     </div>
   );
