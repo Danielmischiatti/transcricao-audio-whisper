@@ -146,7 +146,7 @@ function ExportDropdown({ onExportTXT, onExportDOCX }) {
       {open && (
         <div style={{
           position: "absolute",
-          bottom: "calc(100% + 8px)",
+          top: "calc(100% + 8px)",
           right: 0,
           background: "#1a1a1a",
           border: "1px solid #2e2e2e",
@@ -317,6 +317,7 @@ export default function App() {
 
         .card {
           width: 100%; max-width: 780px;
+          margin: 0 auto;
           background: var(--surface);
           border: 1px solid var(--border);
           border-radius: var(--radius);
