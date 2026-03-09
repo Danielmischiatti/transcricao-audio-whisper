@@ -146,7 +146,7 @@ function ExportDropdown({ onExportTXT, onExportDOCX }) {
       {open && (
         <div style={{
           position: "absolute",
-          top: "calc(100% + 8px)",
+          bottom: "calc(100% + 8px)",
           right: 0,
           background: "#1a1a1a",
           border: "1px solid #2e2e2e",
@@ -296,7 +296,7 @@ export default function App() {
           padding: 56px 24px; gap: 44px;
         }
 
-        .hero { text-align: center; max-width: 560px; }
+        .hero { text-align: center; max-width: 780px; }
         .hero h1 {
           font-size: clamp(40px, 5vw, 62px);
           font-weight: 600;
@@ -511,7 +511,7 @@ export default function App() {
 
         {!result && !loading && (
           <div className="hero">
-            <h1 style={{ whiteSpace: "nowrap" }}>Áudio para <span>texto</span></h1>
+            <h1 style={{ whiteSpace: "nowrap" }}>AUDIO TO <span>TEXT</span></h1>
             <p>Envie qualquer arquivo de áudio e receba<br />a transcrição completa em segundos.</p>
           </div>
         )}
