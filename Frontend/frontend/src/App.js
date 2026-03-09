@@ -38,7 +38,6 @@ function exportTXT(transcricao, segmentos, nomeArquivo) {
 
 // Exportar como DOCX usando docx.js via CDN (carregado dinamicamente)
 async function exportDOCX(transcricao, segmentos, nomeArquivo) {
-  // Carrega a lib docx dinamicamente se ainda não carregou
   if (!window.docx) {
     await new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -49,7 +48,7 @@ async function exportDOCX(transcricao, segmentos, nomeArquivo) {
     });
   }
 
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = window.docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
 
   const children = [
     new Paragraph({
@@ -137,7 +136,6 @@ function ExportDropdown({ onExportTXT, onExportDOCX }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
-  // Fecha ao clicar fora
   const handleBlur = () => setTimeout(() => setOpen(false), 150);
 
   return (
@@ -168,18 +166,11 @@ function ExportDropdown({ onExportTXT, onExportDOCX }) {
           boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
           minWidth: 120,
           zIndex: 10,
-          animation: "fadeUp 0.15s ease",
         }}>
-          <button
-            className="dropdown-item"
-            onMouseDown={onExportTXT}
-          >
+          <button className="dropdown-item" onMouseDown={onExportTXT}>
             <span>📄</span> TXT
           </button>
-          <button
-            className="dropdown-item"
-            onMouseDown={onExportDOCX}
-          >
+          <button className="dropdown-item" onMouseDown={onExportDOCX}>
             <span>📝</span> DOCX
           </button>
         </div>
@@ -196,7 +187,6 @@ export default function App() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showSegments, setShowSegments] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const inputRef = useRef();
 
   const handleFile = (f) => {
@@ -250,13 +240,10 @@ export default function App() {
   const handleExportTXT = () => exportTXT(result.transcricao, result.segmentos, nomeBase);
 
   const handleExportDOCX = async () => {
-    setExporting(true);
     try {
       await exportDOCX(result.transcricao, result.segmentos, nomeBase);
     } catch (e) {
       alert("Erro ao exportar DOCX: " + e.message);
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -324,16 +311,15 @@ export default function App() {
         }
 
         .dropzone {
-          padding: 44px 32px;
-          cursor: pointer; transition: background 0.2s;
-          text-align: center; border-bottom: 1px solid var(--border);
+          padding: 44px 32px; cursor: pointer;
+          transition: background 0.2s; text-align: center;
+          border-bottom: 1px solid var(--border);
         }
         .dropzone:hover, .dropzone.active { background: var(--accent-light); }
         .dropzone-icon {
-          width: 44px; height: 44px;
-          background: var(--accent-light); border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          margin: 0 auto 16px; transition: background 0.2s;
+          width: 44px; height: 44px; background: var(--accent-light);
+          border-radius: 50%; display: flex; align-items: center;
+          justify-content: center; margin: 0 auto 16px; transition: background 0.2s;
         }
         .dropzone:hover .dropzone-icon { background: var(--border); }
         .dropzone-title { font-size: 16px; letter-spacing: -0.01em; margin-bottom: 6px; }
@@ -363,8 +349,7 @@ export default function App() {
         }
 
         .actions {
-          padding: 18px 32px;
-          display: flex; gap: 10px; align-items: center;
+          padding: 18px 32px; display: flex; gap: 10px; align-items: center;
         }
 
         .btn-primary {
@@ -398,10 +383,6 @@ export default function App() {
         .dropdown-item + .dropdown-item { border-top: 1px solid var(--border); }
 
         .result { animation: fadeUp 0.3s ease forwards; }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
 
         .result-header {
           padding: 14px 32px;
@@ -486,15 +467,12 @@ export default function App() {
         }
       `}</style>
 
-      {/* Header */}
       <header className="header">
         <div className="logo">transcreve<span>.ai</span></div>
         <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>whisper / small</span>
       </header>
 
-      {/* Main */}
       <main className="main">
-
         {!result && !loading && (
           <div className="hero">
             <h1>Áudio para texto,<br /><em>sem complicação</em></h1>
@@ -504,7 +482,6 @@ export default function App() {
 
         <div className="card">
 
-          {/* Drop zone */}
           {!file && !result && !loading && (
             <div
               className={`dropzone${dragging ? " active" : ""}`}
@@ -530,7 +507,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Arquivo selecionado */}
           {file && !result && !loading && (
             <div className="file-info">
               <div className="file-icon">🎵</div>
@@ -539,10 +515,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Loading animado */}
           {loading && <LoadingSpinner />}
 
-          {/* Erro */}
           {error && !loading && (
             <div className="error-box">
               <div className="error-dot" />
@@ -550,17 +524,13 @@ export default function App() {
             </div>
           )}
 
-          {/* Resultado */}
           {result && !loading && (
             <div className="result">
               <div className="result-header">
                 <span className="result-label">Transcrição</span>
                 <div className="result-btns">
                   <button className="btn-ghost" onClick={copiar}>{copied ? "✓ copiado" : "copiar"}</button>
-                  <ExportDropdown
-                    onExportTXT={handleExportTXT}
-                    onExportDOCX={handleExportDOCX}
-                  />
+                  <ExportDropdown onExportTXT={handleExportTXT} onExportDOCX={handleExportDOCX} />
                   <button className="btn-ghost" onClick={resetar}>nova</button>
                 </div>
               </div>
@@ -587,12 +557,9 @@ export default function App() {
             </div>
           )}
 
-          {/* Actions */}
           {file && !result && !loading && (
             <div className="actions">
-              <button className="btn-primary" onClick={transcrever}>
-                → Transcrever
-              </button>
+              <button className="btn-primary" onClick={transcrever}>→ Transcrever</button>
               <button className="btn-ghost" onClick={resetar}>cancelar</button>
             </div>
           )}
@@ -605,7 +572,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Ação após erro */}
           {error && !loading && (
             <div className="actions">
               <button className="btn-primary" onClick={transcrever}>→ Tentar novamente</button>
@@ -616,7 +582,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="footer">
         <span className="footer-txt">OpenAI Whisper</span>
         <div className="footer-sep" />
