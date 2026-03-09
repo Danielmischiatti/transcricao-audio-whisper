@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from "react";
 
-// Em produção usa a URL do Render, em desenvolvimento usa localhost
 const API_URL = process.env.REACT_APP_API_URL
   ? `${process.env.REACT_APP_API_URL}/transcrever`
   : "http://localhost:5000/transcrever";
@@ -11,6 +10,184 @@ function formatTime(s) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+function formatSize(bytes) {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// Exportar como TXT
+function exportTXT(transcricao, segmentos, nomeArquivo) {
+  let conteudo = "TRANSCRIÇÃO\n";
+  conteudo += "=".repeat(40) + "\n\n";
+  conteudo += transcricao + "\n\n";
+  if (segmentos && segmentos.length > 1) {
+    conteudo += "\nSEGMENTOS COM TIMESTAMP\n";
+    conteudo += "=".repeat(40) + "\n\n";
+    segmentos.forEach(s => {
+      conteudo += `[${formatTime(s.inicio)} --> ${formatTime(s.fim)}] ${s.texto}\n`;
+    });
+  }
+  const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${nomeArquivo || "transcricao"}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Exportar como DOCX usando docx.js via CDN (carregado dinamicamente)
+async function exportDOCX(transcricao, segmentos, nomeArquivo) {
+  // Carrega a lib docx dinamicamente se ainda não carregou
+  if (!window.docx) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.umd.min.js";
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = window.docx;
+
+  const children = [
+    new Paragraph({
+      text: "Transcrição",
+      heading: HeadingLevel.HEADING_1,
+      spacing: { after: 200 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: transcricao, size: 24 })],
+      spacing: { after: 400, line: 360 },
+    }),
+  ];
+
+  if (segmentos && segmentos.length > 1) {
+    children.push(
+      new Paragraph({
+        text: "Segmentos com Timestamp",
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 400, after: 200 },
+      })
+    );
+    segmentos.forEach(s => {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: `[${formatTime(s.inicio)} → ${formatTime(s.fim)}]  `, bold: true, size: 20, color: "888680" }),
+            new TextRun({ text: s.texto, size: 22 }),
+          ],
+          spacing: { after: 120 },
+        })
+      );
+    });
+  }
+
+  const doc = new Document({
+    sections: [{ properties: {}, children }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${nomeArquivo || "transcricao"}.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Componente de loading animado
+function LoadingSpinner() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "36px 32px" }}>
+      <div style={{ position: "relative", width: 48, height: 48 }}>
+        <div style={{
+          position: "absolute", inset: 0,
+          border: "2px solid var(--border)",
+          borderTopColor: "var(--accent)",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <div style={{
+          position: "absolute", inset: 6,
+          border: "2px solid transparent",
+          borderTopColor: "var(--muted)",
+          borderRadius: "50%",
+          animation: "spin 1.2s linear infinite reverse",
+        }} />
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div className="mono" style={{ fontSize: 13, color: "var(--text)", marginBottom: 4 }}>
+          Transcrevendo...
+        </div>
+        <div className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>
+          Isso pode levar alguns segundos
+        </div>
+      </div>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
+}
+
+// Dropdown de exportação
+function ExportDropdown({ onExportTXT, onExportDOCX }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  // Fecha ao clicar fora
+  const handleBlur = () => setTimeout(() => setOpen(false), 150);
+
+  return (
+    <div style={{ position: "relative" }} ref={ref}>
+      <button
+        className="btn-ghost"
+        onClick={() => setOpen(o => !o)}
+        onBlur={handleBlur}
+        style={{ display: "flex", alignItems: "center", gap: 6 }}
+      >
+        exportar
+        <span style={{
+          fontSize: 8,
+          transition: "transform 0.2s",
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          display: "inline-block",
+        }}>▲</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute",
+          bottom: "calc(100% + 6px)",
+          right: 0,
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          overflow: "hidden",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+          minWidth: 120,
+          zIndex: 10,
+          animation: "fadeUp 0.15s ease",
+        }}>
+          <button
+            className="dropdown-item"
+            onMouseDown={onExportTXT}
+          >
+            <span>📄</span> TXT
+          </button>
+          <button
+            className="dropdown-item"
+            onMouseDown={onExportDOCX}
+          >
+            <span>📝</span> DOCX
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -18,6 +195,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showSegments, setShowSegments] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const inputRef = useRef();
 
   const handleFile = (f) => {
@@ -30,22 +209,16 @@ export default function App() {
   const onDrop = useCallback((e) => {
     e.preventDefault();
     setDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
+    handleFile(e.dataTransfer.files[0]);
   }, []);
-
-  const onDragOver = (e) => { e.preventDefault(); setDragging(true); };
-  const onDragLeave = () => setDragging(false);
 
   const transcrever = async () => {
     if (!file) return;
     setLoading(true);
     setError(null);
     setResult(null);
-
     const form = new FormData();
     form.append("audio", file);
-
     try {
       const res = await fetch(API_URL, { method: "POST", body: form });
       const data = await res.json();
@@ -65,293 +238,392 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const resetar = () => {
+    setFile(null);
+    setResult(null);
+    setError(null);
+    setShowSegments(false);
+  };
+
+  const nomeBase = file ? file.name.replace(/\.[^.]+$/, "") : "transcricao";
+
+  const handleExportTXT = () => exportTXT(result.transcricao, result.segmentos, nomeBase);
+
+  const handleExportDOCX = async () => {
+    setExporting(true);
+    try {
+      await exportDOCX(result.transcricao, result.segmentos, nomeBase);
+    } catch (e) {
+      alert("Erro ao exportar DOCX: " + e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#0a0a0f",
+      background: "#F7F6F3",
       display: "flex",
       flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      padding: "48px 24px",
-      fontFamily: "'DM Mono', 'Courier New', monospace",
-      color: "#e8e4d9",
+      fontFamily: "'Instrument Serif', Georgia, serif",
+      color: "#1a1a1a",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@300;400;500&display=swap');
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .drop-zone {
-          border: 1.5px dashed #2e2e3e;
-          border-radius: 16px;
-          padding: 40px 32px;
-          text-align: center;
-          cursor: pointer;
-          transition: all 0.25s ease;
-          background: #10101a;
-        }
-        .drop-zone:hover, .drop-zone.active {
-          border-color: #7c6af7;
-          background: #13132a;
-          box-shadow: 0 0 40px #7c6af710;
+        :root {
+          --bg: #F7F6F3;
+          --surface: #FFFFFF;
+          --border: #E5E3DC;
+          --text: #1a1a1a;
+          --muted: #888680;
+          --accent: #1a1a1a;
+          --accent-light: #f0efe8;
+          --error: #C1392B;
+          --radius: 12px;
         }
 
-        .btn {
-          background: #7c6af7;
-          color: #fff;
-          border: none;
-          border-radius: 10px;
-          padding: 14px 36px;
-          font-family: inherit;
-          font-size: 14px;
-          font-weight: 500;
-          letter-spacing: 0.08em;
-          cursor: pointer;
-          transition: all 0.2s;
+        body { background: var(--bg); }
+        .mono { font-family: 'Geist Mono', monospace; }
+
+        .header {
+          padding: 32px 40px 0;
+          display: flex; align-items: center; justify-content: space-between;
         }
-        .btn:hover:not(:disabled) {
-          background: #9b8dfb;
-          transform: translateY(-1px);
-          box-shadow: 0 8px 24px #7c6af730;
+        .logo { font-size: 18px; letter-spacing: -0.02em; }
+        .logo span { font-style: italic; color: var(--muted); }
+
+        .main {
+          flex: 1; display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          padding: 48px 24px; gap: 40px;
         }
-        .btn:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
+
+        .hero { text-align: center; max-width: 480px; }
+        .hero h1 {
+          font-size: clamp(36px, 6vw, 54px);
+          font-weight: 400; letter-spacing: -0.03em;
+          line-height: 1.1; margin-bottom: 14px;
         }
+        .hero h1 em { font-style: italic; color: var(--muted); }
+        .hero p {
+          font-family: 'Geist Mono', monospace;
+          font-size: 12px; color: var(--muted); line-height: 1.7;
+        }
+
+        .card {
+          width: 100%; max-width: 520px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius);
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        .dropzone {
+          padding: 44px 32px;
+          cursor: pointer; transition: background 0.2s;
+          text-align: center; border-bottom: 1px solid var(--border);
+        }
+        .dropzone:hover, .dropzone.active { background: var(--accent-light); }
+        .dropzone-icon {
+          width: 44px; height: 44px;
+          background: var(--accent-light); border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 16px; transition: background 0.2s;
+        }
+        .dropzone:hover .dropzone-icon { background: var(--border); }
+        .dropzone-title { font-size: 16px; letter-spacing: -0.01em; margin-bottom: 6px; }
+        .dropzone-sub {
+          font-family: 'Geist Mono', monospace;
+          font-size: 11px; color: var(--muted); letter-spacing: 0.04em;
+        }
+
+        .file-info {
+          display: flex; align-items: center; gap: 12px;
+          padding: 18px 32px; border-bottom: 1px solid var(--border);
+          background: var(--accent-light);
+        }
+        .file-icon {
+          width: 34px; height: 34px; background: var(--surface);
+          border: 1px solid var(--border); border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; font-size: 15px;
+        }
+        .file-name {
+          font-size: 14px; letter-spacing: -0.01em;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+        }
+        .file-size {
+          font-family: 'Geist Mono', monospace;
+          font-size: 11px; color: var(--muted); flex-shrink: 0;
+        }
+
+        .actions {
+          padding: 18px 32px;
+          display: flex; gap: 10px; align-items: center;
+        }
+
+        .btn-primary {
+          flex: 1; background: var(--accent); color: #fff;
+          border: none; border-radius: 8px; padding: 11px 24px;
+          font-family: 'Geist Mono', monospace; font-size: 13px;
+          letter-spacing: 0.02em; cursor: pointer;
+          transition: opacity 0.2s, transform 0.15s;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .btn-primary:hover:not(:disabled) { opacity: 0.82; transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .btn-ghost {
-          background: transparent;
-          border: 1px solid #2e2e3e;
-          color: #a09cb0;
-          border-radius: 8px;
-          padding: 8px 18px;
-          font-family: inherit;
-          font-size: 12px;
-          cursor: pointer;
-          transition: all 0.2s;
+          background: transparent; border: 1px solid var(--border);
+          border-radius: 8px; padding: 10px 14px;
+          font-family: 'Geist Mono', monospace; font-size: 12px;
+          color: var(--muted); cursor: pointer; transition: all 0.15s;
         }
-        .btn-ghost:hover {
-          border-color: #7c6af7;
-          color: #7c6af7;
-        }
+        .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 
-        .pill {
-          display: inline-block;
-          background: #1a1a2e;
-          border: 1px solid #2e2e3e;
-          border-radius: 99px;
-          padding: 4px 14px;
-          font-size: 11px;
-          color: #7c6af7;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
+        .dropdown-item {
+          display: flex; align-items: center; gap: 8px;
+          width: 100%; padding: 10px 16px;
+          background: none; border: none;
+          font-family: 'Geist Mono', monospace; font-size: 12px;
+          color: var(--text); cursor: pointer; text-align: left;
+          transition: background 0.15s;
         }
+        .dropdown-item:hover { background: var(--accent-light); }
+        .dropdown-item + .dropdown-item { border-top: 1px solid var(--border); }
 
-        .segment {
-          display: flex;
-          gap: 16px;
-          padding: 10px 0;
-          border-bottom: 1px solid #1a1a2a;
-          font-size: 13px;
-          line-height: 1.6;
-          align-items: flex-start;
-        }
-        .segment:last-child { border-bottom: none; }
-        .segment-time {
-          color: #7c6af7;
-          font-size: 11px;
-          white-space: nowrap;
-          padding-top: 2px;
-          min-width: 54px;
-        }
-
-        .wave {
-          display: flex;
-          gap: 4px;
-          align-items: center;
-          height: 28px;
-        }
-        .wave span {
-          width: 3px;
-          background: #7c6af7;
-          border-radius: 2px;
-          animation: wave 1.2s ease-in-out infinite;
-        }
-        .wave span:nth-child(2) { animation-delay: 0.1s; }
-        .wave span:nth-child(3) { animation-delay: 0.2s; }
-        .wave span:nth-child(4) { animation-delay: 0.3s; }
-        .wave span:nth-child(5) { animation-delay: 0.4s; }
-
-        @keyframes wave {
-          0%, 100% { height: 8px; opacity: 0.4; }
-          50% { height: 24px; opacity: 1; }
-        }
-
-        .fade-in {
-          animation: fadeIn 0.4s ease forwards;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(12px); }
+        .result { animation: fadeUp 0.3s ease forwards; }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(6px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+          padding: 14px 32px;
+          display: flex; align-items: center; justify-content: space-between;
+          border-bottom: 1px solid var(--border);
+        }
+        .result-label {
+          font-family: 'Geist Mono', monospace;
+          font-size: 10px; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--muted);
+        }
+        .result-btns { display: flex; gap: 8px; align-items: center; }
+
+        .result-text {
+          padding: 24px 32px; font-size: 16px;
+          line-height: 1.8; letter-spacing: -0.01em;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .seg-toggle {
+          padding: 13px 32px;
+          display: flex; align-items: center; justify-content: space-between;
+          cursor: pointer; transition: background 0.15s;
+          border-bottom: 1px solid var(--border);
+        }
+        .seg-toggle:hover { background: var(--accent-light); }
+        .seg-label {
+          font-family: 'Geist Mono', monospace;
+          font-size: 11px; color: var(--muted); letter-spacing: 0.05em;
+        }
+        .seg-arrow { font-size: 9px; color: var(--muted); transition: transform 0.2s; }
+        .seg-arrow.open { transform: rotate(180deg); }
+
+        .seg-item {
+          display: grid; grid-template-columns: 48px 1fr;
+          gap: 14px; padding: 11px 32px;
+          border-bottom: 1px solid var(--border); align-items: baseline;
+        }
+        .seg-item:last-child { border-bottom: none; }
+        .seg-time {
+          font-family: 'Geist Mono', monospace;
+          font-size: 10px; color: var(--muted); letter-spacing: 0.03em;
+        }
+        .seg-text { font-size: 14px; line-height: 1.65; }
+
+        .error-box {
+          padding: 14px 32px; background: #fff8f7;
+          border-bottom: 1px solid #fad7d3;
+          display: flex; gap: 10px; align-items: flex-start;
+        }
+        .error-dot {
+          width: 5px; height: 5px; background: var(--error);
+          border-radius: 50%; margin-top: 6px; flex-shrink: 0;
+        }
+        .error-msg {
+          font-family: 'Geist Mono', monospace;
+          font-size: 12px; color: var(--error); line-height: 1.5;
+        }
+
+        .footer {
+          padding: 24px 40px;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .footer-txt { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--muted); }
+        .footer-sep { width: 3px; height: 3px; background: var(--border); border-radius: 50%; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 600px) {
+          .header { padding: 20px 20px 0; }
+          .main { padding: 32px 16px; gap: 28px; }
+          .hero h1 { font-size: 34px; }
+          .dropzone { padding: 32px 20px; }
+          .file-info, .actions, .result-header, .result-text,
+          .seg-toggle, .seg-item, .error-box { padding-left: 20px; padding-right: 20px; }
+          .seg-item { grid-template-columns: 40px 1fr; gap: 10px; }
+          .footer { padding: 20px; }
         }
       `}</style>
 
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <span className="pill" style={{ marginBottom: 16, display: "inline-block" }}>Whisper AI</span>
-        <h1 style={{
-          fontFamily: "'Syne', sans-serif",
-          fontSize: "clamp(32px, 5vw, 52px)",
-          fontWeight: 800,
-          letterSpacing: "-0.02em",
-          lineHeight: 1.1,
-          marginBottom: 12,
-        }}>
-          Transcrição<br />
-          <span style={{ color: "#7c6af7" }}>de Áudio</span>
-        </h1>
-        <p style={{ color: "#6b6880", fontSize: 14, maxWidth: 360, margin: "0 auto" }}>
-          Envie qualquer áudio e receba a transcrição em segundos usando OpenAI Whisper.
-        </p>
-      </div>
+      <header className="header">
+        <div className="logo">transcreve<span>.ai</span></div>
+        <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>whisper / small</span>
+      </header>
 
-      {/* Card principal */}
-      <div style={{
-        width: "100%",
-        maxWidth: 600,
-        background: "#0e0e1a",
-        border: "1px solid #1e1e2e",
-        borderRadius: 20,
-        padding: 32,
-        display: "flex",
-        flexDirection: "column",
-        gap: 24,
-      }}>
+      {/* Main */}
+      <main className="main">
 
-        {/* Drop zone */}
-        <div
-          className={`drop-zone${dragging ? " active" : ""}`}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onClick={() => inputRef.current.click()}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept="audio/*,.ogg,.mp3,.wav,.m4a,.flac,.webm"
-            style={{ display: "none" }}
-            onChange={(e) => handleFile(e.target.files[0])}
-          />
+        {!result && !loading && (
+          <div className="hero">
+            <h1>Áudio para texto,<br /><em>sem complicação</em></h1>
+            <p>Envie um arquivo de áudio e receba<br />a transcrição em segundos.</p>
+          </div>
+        )}
 
-          {file ? (
-            <div>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>🎙️</div>
-              <div style={{ color: "#e8e4d9", fontWeight: 500, fontSize: 14 }}>{file.name}</div>
-              <div style={{ color: "#6b6880", fontSize: 12, marginTop: 4 }}>
-                {(file.size / 1024 / 1024).toFixed(2)} MB · clique para trocar
+        <div className="card">
+
+          {/* Drop zone */}
+          {!file && !result && !loading && (
+            <div
+              className={`dropzone${dragging ? " active" : ""}`}
+              onDrop={onDrop}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onClick={() => inputRef.current.click()}
+            >
+              <input
+                ref={inputRef} type="file"
+                accept="audio/*,.ogg,.mp3,.wav,.m4a,.flac,.webm"
+                style={{ display: "none" }}
+                onChange={(e) => handleFile(e.target.files[0])}
+              />
+              <div className="dropzone-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M12 16V8m0 0l-3 3m3-3l3 3"/>
+                  <path d="M20 16.7A4 4 0 0017 9h-1.3A7 7 0 104 15.3"/>
+                </svg>
               </div>
-            </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>🎵</div>
-              <div style={{ color: "#a09cb0", fontSize: 14, marginBottom: 4 }}>
-                Arraste um áudio ou clique para selecionar
-              </div>
-              <div style={{ color: "#4a4a5a", fontSize: 12 }}>
-                .mp3 · .wav · .ogg · .m4a · .flac · .webm
-              </div>
+              <div className="dropzone-title">Arraste um arquivo de áudio</div>
+              <div className="dropzone-sub">ou clique para selecionar · mp3 wav ogg m4a flac</div>
             </div>
           )}
-        </div>
 
-        {/* Botão transcrever */}
-        <button
-          className="btn"
-          onClick={transcrever}
-          disabled={!file || loading}
-          style={{ alignSelf: "center", minWidth: 180 }}
-        >
-          {loading ? (
-            <span style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center" }}>
-              <div className="wave">
-                <span/><span/><span/><span/><span/>
-              </div>
-              Transcrevendo...
-            </span>
-          ) : "→ Transcrever"}
-        </button>
-
-        {/* Erro */}
-        {error && (
-          <div className="fade-in" style={{
-            background: "#1a0a0a",
-            border: "1px solid #5a1a1a",
-            borderRadius: 10,
-            padding: "14px 18px",
-            color: "#e87070",
-            fontSize: 13,
-          }}>
-            ⚠️ {error}
-          </div>
-        )}
-
-        {/* Resultado */}
-        {result && (
-          <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{
-              background: "#0a0a14",
-              border: "1px solid #1e1e2e",
-              borderRadius: 12,
-              padding: 20,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <span style={{ fontSize: 11, color: "#7c6af7", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  Transcrição
-                </span>
-                <button className="btn-ghost" onClick={copiar}>
-                  {copied ? "✓ Copiado!" : "Copiar"}
-                </button>
-              </div>
-              <p style={{ fontSize: 15, lineHeight: 1.7, color: "#e8e4d9" }}>
-                {result.transcricao}
-              </p>
+          {/* Arquivo selecionado */}
+          {file && !result && !loading && (
+            <div className="file-info">
+              <div className="file-icon">🎵</div>
+              <div className="file-name">{file.name}</div>
+              <div className="file-size">{formatSize(file.size)}</div>
             </div>
+          )}
 
-            {result.segmentos && result.segmentos.length > 1 && (
-              <div style={{
-                background: "#0a0a14",
-                border: "1px solid #1e1e2e",
-                borderRadius: 12,
-                padding: 20,
-              }}>
-                <div style={{ fontSize: 11, color: "#7c6af7", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>
-                  Segmentos
+          {/* Loading animado */}
+          {loading && <LoadingSpinner />}
+
+          {/* Erro */}
+          {error && !loading && (
+            <div className="error-box">
+              <div className="error-dot" />
+              <div className="error-msg">{error}</div>
+            </div>
+          )}
+
+          {/* Resultado */}
+          {result && !loading && (
+            <div className="result">
+              <div className="result-header">
+                <span className="result-label">Transcrição</span>
+                <div className="result-btns">
+                  <button className="btn-ghost" onClick={copiar}>{copied ? "✓ copiado" : "copiar"}</button>
+                  <ExportDropdown
+                    onExportTXT={handleExportTXT}
+                    onExportDOCX={handleExportDOCX}
+                  />
+                  <button className="btn-ghost" onClick={resetar}>nova</button>
                 </div>
-                {result.segmentos.map((s, i) => (
-                  <div key={i} className="segment">
-                    <span className="segment-time">{formatTime(s.inicio)}</span>
-                    <span style={{ color: "#c8c4d9" }}>{s.texto}</span>
-                  </div>
-                ))}
               </div>
-            )}
+              <div className="result-text">{result.transcricao}</div>
 
-            <button
-              className="btn-ghost"
-              style={{ alignSelf: "center" }}
-              onClick={() => { setFile(null); setResult(null); }}
-            >
-              + Nova transcrição
-            </button>
-          </div>
-        )}
-      </div>
+              {result.segmentos && result.segmentos.length > 1 && (
+                <>
+                  <div className="seg-toggle" onClick={() => setShowSegments(s => !s)}>
+                    <span className="seg-label">{result.segmentos.length} segmentos com timestamp</span>
+                    <span className={`seg-arrow${showSegments ? " open" : ""}`}>▲</span>
+                  </div>
+                  {showSegments && (
+                    <div>
+                      {result.segmentos.map((s, i) => (
+                        <div key={i} className="seg-item">
+                          <span className="seg-time">{formatTime(s.inicio)}</span>
+                          <span className="seg-text">{s.texto}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
-      <p style={{ marginTop: 32, color: "#3a3a4a", fontSize: 12, textAlign: "center" }}>
-        Powered by OpenAI Whisper
-      </p>
+          {/* Actions */}
+          {file && !result && !loading && (
+            <div className="actions">
+              <button className="btn-primary" onClick={transcrever}>
+                → Transcrever
+              </button>
+              <button className="btn-ghost" onClick={resetar}>cancelar</button>
+            </div>
+          )}
+
+          {!file && !result && !loading && (
+            <div className="actions">
+              <button className="btn-primary" onClick={() => inputRef.current.click()}>
+                Selecionar arquivo
+              </button>
+            </div>
+          )}
+
+          {/* Ação após erro */}
+          {error && !loading && (
+            <div className="actions">
+              <button className="btn-primary" onClick={transcrever}>→ Tentar novamente</button>
+              <button className="btn-ghost" onClick={resetar}>cancelar</button>
+            </div>
+          )}
+
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="footer">
+        <span className="footer-txt">OpenAI Whisper</span>
+        <div className="footer-sep" />
+        <span className="footer-txt">Hugging Face</span>
+        <div className="footer-sep" />
+        <span className="footer-txt">Vercel</span>
+      </footer>
     </div>
   );
 }
