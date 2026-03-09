@@ -273,11 +273,9 @@ export default function App() {
         }
 
         .logo {
-          font-size: 20px;
-          font-weight: 600;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          color: var(--text);
+          font-size: 20px; font-weight: 600;
+          letter-spacing: 0.06em; text-transform: uppercase;
+          color: var(--text); cursor: pointer;
         }
         .logo span { color: var(--muted2); font-weight: 300; }
 
@@ -503,8 +501,8 @@ export default function App() {
 
       {/* Header */}
       <header className="header">
-        <div className="logo">Transcreve<span>.ai</span></div>
-        <div className="badge">Whisper / Small</div>
+        <a href="/" style={{ textDecoration: "none" }} className="logo">Transcreve<span>.ai</span></a>
+        <div className="badge">Whisper / Base</div>
       </header>
 
       {/* Main */}
@@ -512,7 +510,7 @@ export default function App() {
 
         {!result && !loading && (
           <div className="hero">
-            <h1>Áudio para<br /><span>texto</span></h1>
+            <h1 style={{ whiteSpace: "nowrap" }}>Áudio para <span>texto</span></h1>
             <p>Envie qualquer arquivo de áudio e receba<br />a transcrição completa em segundos.</p>
           </div>
         )}
@@ -626,7 +624,7 @@ export default function App() {
         <div className="footer-sep" />
         <span className="footer-txt">Vercel</span>
         <div className="footer-sep" />
-        <span className="footer-txt">danielmischiatti</span>
+        <span className="footer-txt">by daniel mischiatti</span>
       </footer>
     </div>
   );

@@ -13,7 +13,7 @@ CORS(app, origins=[
 ])
 
 print("Carregando modelo Whisper...")
-model = whisper.load_model("small")
+model = whisper.load_model("base")
 print("Modelo carregado!")
 
 
