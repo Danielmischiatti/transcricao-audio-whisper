@@ -176,6 +176,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showSegments, setShowSegments] = useState(false);
+  const [showNovaTooltip, setShowNovaTooltip] = useState(false);
+  const [mp4Warning, setMp4Warning] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const inputRef = useRef();
@@ -203,6 +205,11 @@ export default function App() {
 
   const transcrever = async () => {
     if (!file) return;
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext === "mp4") {
+      setMp4Warning(true);
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
@@ -232,6 +239,8 @@ export default function App() {
     setResult(null);
     setError(null);
     setShowSegments(false);
+    setMp4Warning(false);
+    setShowNovaTooltip(false);
     setRecording(false);
     setRecSeconds(0);
     clearInterval(timerRef.current);
@@ -619,7 +628,7 @@ export default function App() {
                   </svg>
                 </div>
                 <div className="dropzone-title">Arraste um arquivo de áudio</div>
-                <div className="dropzone-sub">ou clique para selecionar · mp3 wav ogg m4a flac</div>
+                <div className="dropzone-sub">ou clique para selecionar · mp3 mp4 wav ogg m4a flac</div>
               </div>
 
               <div className="divider">ou grave agora</div>
@@ -666,6 +675,23 @@ export default function App() {
             </div>
           )}
 
+          {mp4Warning && !loading && (
+            <div style={{
+              padding: "16px 40px", background: "#120e08",
+              borderBottom: "1px solid #3a2a10",
+              display: "flex", gap: 12, alignItems: "flex-start",
+            }}>
+              <div style={{ width: 6, height: 6, background: "#e09030", borderRadius: "50%", marginTop: 7, flexShrink: 0 }} />
+              <div style={{ fontSize: 13, color: "#c8882a", lineHeight: 1.6, letterSpacing: "0.02em" }}>
+                Arquivos <strong>.mp4</strong> ainda não são suportados diretamente.
+                Para transcrever, converta o vídeo para <strong>.mp3</strong> antes de enviar —
+                você pode usar ferramentas como <em>VLC</em>, <em>HandBrake</em> ou conversores online como{" "}
+                <a href="https://cloudconvert.com/mp4-to-mp3" target="_blank" rel="noreferrer"
+                  style={{ color: "#e09030", textDecoration: "underline" }}>cloudconvert.com</a>.
+              </div>
+            </div>
+          )}
+
           {loading && <LoadingSpinner />}
 
           {error && !loading && (
@@ -682,7 +708,38 @@ export default function App() {
                 <div className="result-btns">
                   <button className="btn-ghost" onClick={copiar}>{copied ? "✓ Copiado" : "Copiar"}</button>
                   <ExportDropdown onExportTXT={handleExportTXT} onExportDOCX={handleExportDOCX} />
-                  <button className="btn-ghost" onClick={resetar}>Nova</button>
+                  <div style={{ position: "relative" }}>
+                    <button
+                      className="btn-ghost"
+                      onClick={() => setShowNovaTooltip(v => !v)}
+                      onBlur={() => setTimeout(() => setShowNovaTooltip(false), 150)}
+                    >Nova</button>
+                    {showNovaTooltip && (
+                      <div style={{
+                        position: "absolute", top: "calc(100% + 8px)", right: 0,
+                        background: "#1a1a1a", border: "1px solid #2e2e2e",
+                        borderRadius: 10, padding: "14px 16px",
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                        minWidth: 220, zIndex: 20,
+                      }}>
+                        <div style={{ fontSize: 12, color: "#aaa", marginBottom: 12, lineHeight: 1.5, letterSpacing: "0.02em" }}>
+                          Sua transcrição atual será perdida. Continuar?
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            className="btn-primary"
+                            onMouseDown={resetar}
+                            style={{ flex: 1, padding: "9px 12px", fontSize: 11 }}
+                          >Sim, nova</button>
+                          <button
+                            className="btn-ghost"
+                            onMouseDown={() => setShowNovaTooltip(false)}
+                            style={{ padding: "9px 12px", fontSize: 11 }}
+                          >Cancelar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="result-text">{result.transcricao}</div>
