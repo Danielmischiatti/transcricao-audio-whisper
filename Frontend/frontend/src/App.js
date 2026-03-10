@@ -176,7 +176,12 @@ export default function App() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showSegments, setShowSegments] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
   const inputRef = useRef();
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
 
   // Título da aba do navegador
   useEffect(() => {
@@ -227,6 +232,54 @@ export default function App() {
     setResult(null);
     setError(null);
     setShowSegments(false);
+    setRecording(false);
+    setRecSeconds(0);
+    clearInterval(timerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      setRecSeconds(0);
+      timerRef.current = setInterval(() => setRecSeconds(s => s + 1), 1000);
+    } catch {
+      setError("Não foi possível acessar o microfone. Verifique as permissões.");
+    }
+  };
+
+  const stopAndSend = () => {
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    const prevOnStop = mr.onstop;
+    mr.onstop = function(e) {
+      if (prevOnStop) prevOnStop.call(this, e);
+      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      const f = new File([blob], `gravacao-${Date.now()}.webm`, { type: "audio/webm" });
+      handleFile(f);
+    };
+    mr.stop();
+    clearInterval(timerRef.current);
+    setRecording(false);
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
+    clearInterval(timerRef.current);
+    setRecording(false);
+    setRecSeconds(0);
   };
 
   const nomeBase = file ? file.name.replace(/\.[^.]+$/, "") : "transcricao";
@@ -485,6 +538,32 @@ export default function App() {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(0.9); }
+        }
+        .rec-icon {
+          width: 56px; height: 56px; border-radius: 50%;
+          background: var(--surface2); border: 1px solid var(--border2);
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 10px;
+        }
+        .rec-icon.active {
+          background: #c0392b; border-color: #c0392b;
+          animation: pulse 1.2s ease-in-out infinite;
+        }
+        .rec-timer {
+          font-size: 22px; font-weight: 500; letter-spacing: 0.1em;
+          color: #e05555; margin-bottom: 20px;
+        }
+        .divider {
+          display: flex; align-items: center; gap: 12px;
+          padding: 14px 32px; color: var(--muted);
+          font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+        }
+        .divider::before, .divider::after {
+          content: ""; flex: 1; height: 1px; background: var(--border);
+        }
 
         @media (max-width: 640px) {
           .header { padding: 24px 20px 0; }
@@ -518,28 +597,64 @@ export default function App() {
 
         <div className="card">
 
-          {!file && !result && !loading && (
-            <div
-              className={`dropzone${dragging ? " active" : ""}`}
-              onDrop={onDrop}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onClick={() => inputRef.current.click()}
-            >
-              <input
-                ref={inputRef} type="file"
-                accept="audio/*,.ogg,.mp3,.wav,.m4a,.flac,.webm"
-                style={{ display: "none" }}
-                onChange={(e) => handleFile(e.target.files[0])}
-              />
-              <div className="dropzone-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M12 16V8m0 0l-3 3m3-3l3 3"/>
-                  <path d="M20 16.7A4 4 0 0017 9h-1.3A7 7 0 104 15.3"/>
+          {!file && !result && !loading && !recording && (
+            <>
+              <div
+                className={`dropzone${dragging ? " active" : ""}`}
+                onDrop={onDrop}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onClick={() => inputRef.current.click()}
+              >
+                <input
+                  ref={inputRef} type="file"
+                  accept="audio/*,.ogg,.mp3,.wav,.m4a,.flac,.webm"
+                  style={{ display: "none" }}
+                  onChange={(e) => handleFile(e.target.files[0])}
+                />
+                <div className="dropzone-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M12 16V8m0 0l-3 3m3-3l3 3"/>
+                    <path d="M20 16.7A4 4 0 0017 9h-1.3A7 7 0 104 15.3"/>
+                  </svg>
+                </div>
+                <div className="dropzone-title">Arraste um arquivo de áudio</div>
+                <div className="dropzone-sub">ou clique para selecionar · mp3 wav ogg m4a flac</div>
+              </div>
+
+              <div className="divider">ou grave agora</div>
+
+              <div style={{ display: "flex", justifyContent: "center", padding: "20px 32px 28px" }}>
+                <button onClick={startRecording} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                  <div className="rec-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round">
+                      <rect x="9" y="2" width="6" height="12" rx="3"/>
+                      <path d="M5 10a7 7 0 0014 0"/>
+                      <line x1="12" y1="19" x2="12" y2="22"/>
+                      <line x1="8" y1="22" x2="16" y2="22"/>
+                    </svg>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--muted)" }}>Gravar áudio</span>
+                </button>
+              </div>
+            </>
+          )}
+
+          {recording && !file && !result && !loading && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 32px 28px" }}>
+              <div className="rec-icon active">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+                  <rect x="9" y="2" width="6" height="12" rx="3"/>
+                  <path d="M5 10a7 7 0 0014 0"/>
+                  <line x1="12" y1="19" x2="12" y2="22"/>
+                  <line x1="8" y1="22" x2="16" y2="22"/>
                 </svg>
               </div>
-              <div className="dropzone-title">Arraste um arquivo de áudio</div>
-              <div className="dropzone-sub">ou clique para selecionar · mp3 wav ogg m4a flac</div>
+              <div className="rec-timer">{formatTime(recSeconds)}</div>
+              <div style={{ display: "flex", gap: 12, width: "100%" }}>
+                <button className="btn-primary" onClick={stopAndSend}>→ Enviar gravação</button>
+                <button className="btn-ghost" onClick={cancelRecording}>✕ Cancelar</button>
+              </div>
             </div>
           )}
 
