@@ -182,6 +182,7 @@ export default function App() {
   const [recSeconds, setRecSeconds] = useState(0);
   const inputRef = useRef();
   const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
 
@@ -244,6 +245,7 @@ export default function App() {
     setRecording(false);
     setRecSeconds(0);
     clearInterval(timerRef.current);
+    stopStream();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
@@ -252,10 +254,10 @@ export default function App() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mr = new MediaRecorder(stream);
       chunksRef.current = [];
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => { stream.getTracks().forEach(t => t.stop()); };
       mr.start();
       mediaRecorderRef.current = mr;
       setRecording(true);
@@ -266,12 +268,18 @@ export default function App() {
     }
   };
 
+  const stopStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  };
+
   const stopAndSend = () => {
     const mr = mediaRecorderRef.current;
     if (!mr) return;
-    const prevOnStop = mr.onstop;
-    mr.onstop = function(e) {
-      if (prevOnStop) prevOnStop.call(this, e);
+    mr.onstop = function() {
+      stopStream();
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
       const f = new File([blob], `gravacao-${Date.now()}.webm`, { type: "audio/webm" });
       handleFile(f);
@@ -286,6 +294,7 @@ export default function App() {
       mediaRecorderRef.current.onstop = null;
       mediaRecorderRef.current.stop();
     }
+    stopStream();
     clearInterval(timerRef.current);
     setRecording(false);
     setRecSeconds(0);
