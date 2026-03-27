@@ -178,6 +178,7 @@ export default function App() {
   const [showSegments, setShowSegments] = useState(false);
   const [showNovaTooltip, setShowNovaTooltip] = useState(false);
   const [mp4Warning, setMp4Warning] = useState(false);
+  const [streamingTexto, setStreamingTexto] = useState("");
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const inputRef = useRef();
@@ -206,23 +207,59 @@ export default function App() {
 
   const transcrever = async () => {
     if (!file) return;
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (ext === "mp4") {
-      setMp4Warning(true);
-      return;
-    }
     setLoading(true);
     setError(null);
     setResult(null);
+    setStreamingTexto("");
+
     const form = new FormData();
     form.append("audio", file);
+
     try {
       const res = await fetch(API_URL, { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.erro || "Erro desconhecido");
-      setResult(data);
+
+      // Se a resposta não for SSE (ex: erro 400/413), lê como JSON normal
+      if (!res.ok || !res.headers.get("content-type")?.includes("text/event-stream")) {
+        const data = await res.json();
+        throw new Error(data.erro || "Erro desconhecido");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let textoAcumulado = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const linhas = buffer.split("\n\n");
+        buffer = linhas.pop(); // guarda fragmento incompleto
+
+        for (const bloco of linhas) {
+          const linha = bloco.replace(/^data: /, "").trim();
+          if (!linha) continue;
+
+          let evento;
+          try { evento = JSON.parse(linha); } catch { continue; }
+
+          if (evento.tipo === "segmento") {
+            // Exibe texto em tempo real conforme cada segmento chega
+            textoAcumulado += (textoAcumulado ? " " : "") + evento.texto;
+            setStreamingTexto(textoAcumulado);
+          } else if (evento.tipo === "fim") {
+            // Transcrição completa — atualiza resultado final com segmentos
+            setResult({ transcricao: evento.transcricao, segmentos: evento.segmentos });
+            setStreamingTexto("");
+          } else if (evento.tipo === "erro") {
+            throw new Error(evento.mensagem);
+          }
+        }
+      }
     } catch (err) {
       setError(err.message);
+      setStreamingTexto("");
     } finally {
       setLoading(false);
     }
@@ -244,6 +281,7 @@ export default function App() {
     setShowNovaTooltip(false);
     setRecording(false);
     setRecSeconds(0);
+    setStreamingTexto("");
     clearInterval(timerRef.current);
     stopStream();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -626,7 +664,7 @@ export default function App() {
               >
                 <input
                   ref={inputRef} type="file"
-                  accept="audio/*,.ogg,.mp3,.wav,.m4a,.flac,.webm"
+                  accept="audio/*,.ogg,.mp3,.wav,.m4a,.flac,.webm,.mp4,.mkv,.mov,.avi"
                   style={{ display: "none" }}
                   onChange={(e) => handleFile(e.target.files[0])}
                 />
@@ -637,7 +675,7 @@ export default function App() {
                   </svg>
                 </div>
                 <div className="dropzone-title">Arraste um arquivo de áudio</div>
-                <div className="dropzone-sub">ou clique para selecionar · mp3 mp4 wav ogg m4a flac</div>
+                <div className="dropzone-sub">ou clique para selecionar · mp3 mp4 wav ogg m4a flac mkv mov</div>
               </div>
 
               <div className="divider">ou grave agora</div>
@@ -684,24 +722,29 @@ export default function App() {
             </div>
           )}
 
-          {mp4Warning && !loading && (
-            <div style={{
-              padding: "16px 40px", background: "#120e08",
-              borderBottom: "1px solid #3a2a10",
-              display: "flex", gap: 12, alignItems: "flex-start",
-            }}>
-              <div style={{ width: 6, height: 6, background: "#e09030", borderRadius: "50%", marginTop: 7, flexShrink: 0 }} />
-              <div style={{ fontSize: 13, color: "#c8882a", lineHeight: 1.6, letterSpacing: "0.02em" }}>
-                Arquivos <strong>.mp4</strong> ainda não são suportados diretamente.
-                Para transcrever, converta o vídeo para <strong>.mp3</strong> antes de enviar —
-                você pode usar ferramentas como <em>VLC</em>, <em>HandBrake</em> ou conversores online como{" "}
-                <a href="https://cloudconvert.com/mp4-to-mp3" target="_blank" rel="noreferrer"
-                  style={{ color: "#e09030", textDecoration: "underline" }}>cloudconvert.com</a>.
-              </div>
-            </div>
+          {loading && (
+            <>
+              <LoadingSpinner />
+              {streamingTexto && (
+                <div style={{
+                  padding: "0 32px 28px",
+                  fontSize: 14,
+                  color: "#aaa",
+                  lineHeight: 1.7,
+                  whiteSpace: "pre-wrap",
+                  borderTop: "1px solid #2a2a2a",
+                  paddingTop: 20,
+                  marginTop: -8,
+                }}>
+                  <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.08em", marginBottom: 10, textTransform: "uppercase" }}>
+                    Transcrevendo em tempo real...
+                  </div>
+                  {streamingTexto}
+                  <span style={{ display: "inline-block", width: 8, height: 14, background: "#555", marginLeft: 4, animation: "spin 1s linear infinite", borderRadius: 1 }} />
+                </div>
+              )}
+            </>
           )}
-
-          {loading && <LoadingSpinner />}
 
           {error && !loading && (
             <div className="error-box">
