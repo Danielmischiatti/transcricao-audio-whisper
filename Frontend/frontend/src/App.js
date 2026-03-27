@@ -177,7 +177,6 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [showSegments, setShowSegments] = useState(false);
   const [showNovaTooltip, setShowNovaTooltip] = useState(false);
-  const [mp4Warning, setMp4Warning] = useState(false);
   const [streamingTexto, setStreamingTexto] = useState("");
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
@@ -277,7 +276,6 @@ export default function App() {
     setResult(null);
     setError(null);
     setShowSegments(false);
-    setMp4Warning(false);
     setShowNovaTooltip(false);
     setRecording(false);
     setRecSeconds(0);
